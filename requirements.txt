@@ -1,0 +1,14 @@
+numpy
+opencv-python
+scikit-image
+matplotlib
+pandas
+torch
+torchvision
+ultralytics
+transformers
+torchmetrics
+tqdm
+pyyaml
+requests
+jupyter
