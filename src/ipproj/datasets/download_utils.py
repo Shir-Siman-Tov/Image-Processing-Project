@@ -14,6 +14,13 @@ def download_and_extract(url: str, dest_dir: Path, marker_name: str) -> Path:
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
     marker = dest_dir / marker_name
+    # On Colab, dest_dir lives on a Drive FUSE mount, which can serve a stale
+    # "not found" for a marker that exists but wasn't re-indexed yet after a
+    # fresh mount - forcing a directory listing resolves that before we trust
+    # `.exists()`. Without this, a false negative here causes re-extraction
+    # into a second same-named Drive folder (Drive allows duplicate names).
+    if marker.parent.exists():
+        list(marker.parent.iterdir())
     if marker.exists():
         return dest_dir
 
