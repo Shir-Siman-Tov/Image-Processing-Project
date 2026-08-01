@@ -18,7 +18,8 @@ def download_and_extract(url: str, dest_dir: Path, marker_name: str) -> Path:
         return dest_dir
 
     zip_path = dest_dir / Path(url).name
-    if not zip_path.exists():
+
+    def _fetch() -> None:
         response = requests.get(url, stream=True, timeout=60)
         response.raise_for_status()
         total = int(response.headers.get("content-length", 0))
@@ -26,6 +27,21 @@ def download_and_extract(url: str, dest_dir: Path, marker_name: str) -> Path:
             for chunk in response.iter_content(chunk_size=1 << 20):
                 f.write(chunk)
                 bar.update(len(chunk))
+
+    if not zip_path.exists():
+        _fetch()
+
+    if not zipfile.is_zipfile(zip_path):
+        # A previous download may have been interrupted (e.g. Colab runtime
+        # disconnect) leaving a truncated file cached under this same name -
+        # retry once from scratch instead of failing forever on the corrupt cache.
+        zip_path.unlink()
+        _fetch()
+        if not zipfile.is_zipfile(zip_path):
+            raise zipfile.BadZipFile(
+                f"Downloaded '{zip_path}' from {url} is not a valid zip file even after retrying. "
+                "The source may be serving an error page instead of the archive - check the URL."
+            )
 
     with zipfile.ZipFile(zip_path) as zf:
         zf.extractall(dest_dir)
