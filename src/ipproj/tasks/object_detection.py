@@ -22,10 +22,30 @@ def load_pretrained() -> YOLO:
     return YOLO(config.YOLO_BASE_WEIGHTS)
 
 
+def checkpoint_path_for(run_name: str) -> Path:
+    """Where fine_tune() writes/looks for `run_name`'s best.pt.
+
+    Exposed so callers can check `.exists()` before doing any of the (also
+    expensive) prep work fine_tune() needs, e.g. building the YOLO-format
+    dataset - no point building it just to have fine_tune() throw it away.
+    """
+    return config.CHECKPOINT_ROOT / "yolo" / run_name / "weights" / "best.pt"
+
+
 def fine_tune(data_yaml: Path, run_name: str, epochs: int = config.YOLO_FINE_TUNE_EPOCHS) -> Path:
     """Fine-tunes YOLO's head on config.KITTI_DETECTION_CLASSES.
     `data_yaml` comes from datasets.kitti_yolo_format.build_yolo_dataset().
-    Returns the path to the resulting best.pt checkpoint."""
+    Returns the path to the resulting best.pt checkpoint.
+
+    Skips training and returns the existing checkpoint if `run_name` was
+    already fine-tuned before. CHECKPOINT_ROOT lives on Drive on Colab, so a
+    runtime restart (which wipes the kernel but not Drive) would otherwise
+    silently redo an expensive training run on every rerun.
+    """
+    checkpoint_path = checkpoint_path_for(run_name)
+    if checkpoint_path.exists():
+        return checkpoint_path
+
     model = load_pretrained()
     results = model.train(
         data=str(data_yaml),
