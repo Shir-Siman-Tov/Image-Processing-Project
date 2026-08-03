@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 
 from ipproj import config
-from ipproj.metrics.epe import compute_epe
+from ipproj.metrics.epe import compute_epe, compute_fl_error
 
 
 def compute_flow(frame1: np.ndarray, frame2: np.ndarray) -> np.ndarray:
@@ -15,6 +15,9 @@ def compute_flow(frame1: np.ndarray, frame2: np.ndarray) -> np.ndarray:
     return cv2.calcOpticalFlowFarneback(gray1, gray2, None, **config.FARNEBACK_PARAMS)
 
 
-def evaluate(frame1: np.ndarray, frame2: np.ndarray, gt_flow: np.ndarray, valid: np.ndarray) -> float:
+def evaluate(frame1: np.ndarray, frame2: np.ndarray, gt_flow: np.ndarray, valid: np.ndarray) -> dict:
     pred_flow = compute_flow(frame1, frame2)
-    return compute_epe(pred_flow, gt_flow, valid)
+    return {
+        "epe": compute_epe(pred_flow, gt_flow, valid),
+        "fl_error": compute_fl_error(pred_flow, gt_flow, valid),
+    }

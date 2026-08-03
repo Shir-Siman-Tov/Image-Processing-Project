@@ -98,6 +98,9 @@ INTERPOLATION_SCALE = 2  # upsample factor before bilateral filtering, per the a
 # --- Task hyperparameters ---------------------------------------------------
 
 ORB_N_FEATURES = 1000
+ORB_RATIO_TEST_THRESHOLD = 0.75  # Lowe's ratio test; deviates from the cited
+# F_Features4ML lecture (which only describes brute-force greedy matching) -
+# user-approved deviation, see feature_matching.py docstring.
 FARNEBACK_PARAMS = {
     "pyr_scale": 0.5,
     "levels": 3,
@@ -107,6 +110,10 @@ FARNEBACK_PARAMS = {
     "poly_sigma": 1.2,
     "flags": 0,
 }
+# KITTI Flow 2015's own Fl-all criterion: a pixel is an outlier if its EPE
+# exceeds both this pixel threshold and this fraction of the GT flow magnitude.
+FL_ERROR_PIXEL_THRESHOLD = 3.0
+FL_ERROR_RELATIVE_THRESHOLD = 0.05
 YOLO_FINE_TUNE_EPOCHS = 50
 SEGFORMER_FINE_TUNE_EPOCHS = 10
 SEGFORMER_FINE_TUNE_LR = 5e-5

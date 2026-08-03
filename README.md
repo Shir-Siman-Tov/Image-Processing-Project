@@ -10,7 +10,7 @@ Image Processing course final project: evaluating how classical computer-vision 
 | # | Task | Level | Method | GT source | Metric |
 |---|------|-------|--------|-----------|--------|
 | 1 | Feature/keypoint matching | low-level | ORB | none (self-referential correspondence) | match accuracy / repeatability |
-| 2 | Optical flow | low-level | classical (Farneback) | KITTI Flow 2015 (native) | EPE |
+| 2 | Optical flow | low-level | classical (Farneback) | KITTI Flow 2015 (native) | EPE / Fl-error |
 | 3 | Object detection | high-level, DL | YOLOv8 (head fine-tuned on KITTI's 8 classes) | KITTI 2D Object (native) | mAP / IoU, per class |
 | 4 | Semantic segmentation | high-level, DL | SegFormer (Cityscapes-pretrained) | KITTI Semantics, 200 imgs (native) | IoU |
 
