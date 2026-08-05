@@ -19,10 +19,12 @@ from ipproj.datasets.kitti import read_image
 from ipproj.metrics.segmentation_iou import new_metric
 
 NUM_CLASSES = len(config.CITYSCAPES_TRAINID_LABELS)
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def load_pretrained():
-    model = SegformerForSemanticSegmentation.from_pretrained(config.SEGFORMER_CHECKPOINT)
+    model = SegformerForSemanticSegmentation.from_pretrained(config.SEGFORMER_CHECKPOINT).to(DEVICE)
+    model.config.semantic_loss_ignore_index = config.SEGFORMER_IGNORE_INDEX
     processor = SegformerImageProcessor.from_pretrained(config.SEGFORMER_CHECKPOINT)
     return model, processor
 
@@ -35,20 +37,23 @@ def verify_class_alignment(model) -> bool:
 
 
 def predict(model, processor, image: np.ndarray) -> np.ndarray:
-    inputs = processor(images=image, return_tensors="pt")
+    inputs = processor(images=image, return_tensors="pt").to(DEVICE)
     with torch.no_grad():
         logits = model(**inputs).logits
     upsampled = torch.nn.functional.interpolate(logits, size=image.shape[:2], mode="bilinear", align_corners=False)
-    pred_ids = upsampled.argmax(dim=1).squeeze(0).numpy()
+    pred_ids = upsampled.argmax(dim=1).squeeze(0).cpu().numpy()
     if config.SEGFORMER_CLASS_ID_REMAP:
         remap = config.SEGFORMER_CLASS_ID_REMAP
-        pred_ids = np.vectorize(lambda i: remap.get(i, i))(pred_ids)
+        lut = np.arange(256)
+        for src_id, dst_id in remap.items():
+            lut[src_id] = dst_id
+        pred_ids = lut[pred_ids]
     return pred_ids
 
 
 def evaluate(model, processor, samples: list) -> torch.Tensor:
     """`samples`: list of kitti.SegmentationSample. Returns per-class IoU tensor."""
-    metric = new_metric(NUM_CLASSES)
+    metric = new_metric(NUM_CLASSES, ignore_index=config.SEGFORMER_IGNORE_INDEX)
     for sample in samples:
         image = read_image(sample.image_path)
         pred = predict(model, processor, image)
@@ -71,14 +76,10 @@ def fine_tune(model, processor, samples: list, epochs: int = config.SEGFORMER_FI
         for sample in samples:
             image = read_image(sample.image_path)
             gt = cv2.imread(str(sample.mask_path), cv2.IMREAD_UNCHANGED)
-            inputs = processor(images=image, return_tensors="pt")
-            labels = torch.nn.functional.interpolate(
-                torch.as_tensor(gt, dtype=torch.float32)[None, None],
-                size=inputs["pixel_values"].shape[-2:],
-                mode="nearest",
-            ).squeeze(0).squeeze(0).long()
+            inputs = processor(images=image, return_tensors="pt").to(DEVICE)
+            labels = torch.as_tensor(gt, dtype=torch.long, device=DEVICE)[None]
 
-            outputs = model(**inputs, labels=labels[None])
+            outputs = model(**inputs, labels=labels)
             outputs.loss.backward()
             optimizer.step()
             optimizer.zero_grad()

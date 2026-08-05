@@ -11,4 +11,6 @@ def compute_snr_db(clean: np.ndarray, distorted: np.ndarray) -> float:
     noise_power = np.mean((clean - distorted) ** 2)
     if noise_power == 0:
         return float("inf")
+    if signal_power == 0:
+        return 0.0
     return float(10 * np.log10(signal_power / noise_power))

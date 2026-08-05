@@ -75,6 +75,9 @@ KITTI_DETECTION_CLASSES = [
     "Misc",
 ]
 KITTI_IGNORE_LABEL = "DontCare"
+# IoU overlap with a DontCare box above which a prediction is suppressed from
+# scoring entirely (neither TP nor FP), matching KITTI's own eval protocol.
+KITTI_IGNORE_IOU_THRESHOLD = 0.5
 
 # --- Models -------------------------------------------------------------------
 YOLO_BASE_WEIGHTS = "yolov8n.pt"  # COCO-pretrained backbone, head re-trained on KITTI_DETECTION_CLASSES
@@ -115,6 +118,8 @@ FARNEBACK_PARAMS = {
 FL_ERROR_PIXEL_THRESHOLD = 3.0
 FL_ERROR_RELATIVE_THRESHOLD = 0.05
 YOLO_FINE_TUNE_EPOCHS = 50
+YOLO_EVAL_BATCH_SIZE = 16  # Ultralytics inference batch size for evaluate()
+YOLO_CONFIDENCE_THRESHOLD = 0.25  # score threshold for keeping a YOLO detection
 SEGFORMER_FINE_TUNE_EPOCHS = 10
 SEGFORMER_FINE_TUNE_LR = 5e-5
 
@@ -131,3 +136,7 @@ CITYSCAPES_TRAINID_LABELS = [
 # the checkpoint's class order does NOT match CITYSCAPES_TRAINID_LABELS above -
 # maps {checkpoint_class_id: kitti_trainid}. Leave None until that check runs.
 SEGFORMER_CLASS_ID_REMAP = None
+
+# Cityscapes' void/unlabeled trainId - also HF SegformerConfig's default
+# semantic_loss_ignore_index, so eval metric and fine-tune loss share one value.
+SEGFORMER_IGNORE_INDEX = 255

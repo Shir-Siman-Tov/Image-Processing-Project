@@ -4,6 +4,7 @@ each one embeds consistent, README-ready figures rather than ad hoc plots.
 """
 from pathlib import Path
 
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -57,6 +58,34 @@ def plot_segmentation_mask(image: np.ndarray, mask: np.ndarray, ax=None, alpha: 
     return ax
 
 
+def plot_orb_keypoints(image: np.ndarray, keypoints, ax=None, color: tuple = (0, 255, 0)):
+    ax = ax or plt.gca()
+    rendered = cv2.drawKeypoints(image, keypoints, None, color=color, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    ax.imshow(rendered)
+    ax.axis("off")
+    return ax
+
+
+def flow_to_color(flow: np.ndarray) -> np.ndarray:
+    """HSV-encodes a dense flow field for display: hue = direction, value =
+    magnitude (normalized to the frame's own range). Standard OpenCV
+    visualization convention - purely a rendering choice, not part of the
+    EPE/Fl-error metric computation."""
+    magnitude, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+    hsv = np.zeros((*flow.shape[:2], 3), dtype=np.uint8)
+    hsv[..., 0] = angle * 180 / np.pi / 2
+    hsv[..., 1] = 255
+    hsv[..., 2] = cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX)
+    return cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+
+
+def plot_optical_flow(flow: np.ndarray, ax=None):
+    ax = ax or plt.gca()
+    ax.imshow(flow_to_color(flow))
+    ax.axis("off")
+    return ax
+
+
 def plot_before_after(before: np.ndarray, after: np.ndarray, title_before: str = "Before", title_after: str = "After"):
     fig, axes = plt.subplots(1, 2, figsize=(8, 4))
     axes[0].imshow(before)
@@ -82,9 +111,84 @@ def plot_metric_vs_intensity(intensity_values: list, metric_series: dict, xlabel
     return fig
 
 
+def plot_metric_vs_snr_by_distortion(
+    snr_by_distortion: dict, metric_by_distortion: dict, clean_reference: float, xlabel: str, ylabel: str, title: str
+):
+    """One curve per distortion, each with its own SNR x-values (distortions
+    degrade SNR at different rates, so a shared x-axis like
+    `plot_metric_vs_intensity` doesn't fit). `clean_reference`: optional
+    float, drawn as a horizontal dashed line; pass None to omit it (e.g.
+    metrics with no meaningful clean-only baseline)."""
+    fig, ax = plt.subplots(figsize=(6, 4))
+    for name, snr_values in snr_by_distortion.items():
+        metric_values = metric_by_distortion[name]
+        order = np.argsort(snr_values)
+        ax.plot(np.array(snr_values)[order], np.array(metric_values)[order], marker="o", label=name)
+    if clean_reference is not None:
+        ax.axhline(clean_reference, linestyle="--", color="gray", label="clean baseline")
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend()
+    fig.tight_layout()
+    return fig
+
+
 def plot_bar_per_class(class_names: list, values: list, ylabel: str, title: str):
     fig, ax = plt.subplots(figsize=(max(6, len(class_names) * 0.8), 4))
     ax.bar(class_names, values)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.tick_params(axis="x", rotation=45)
+    fig.tight_layout()
+    return fig
+
+
+def plot_grouped_bar_per_class(class_names: list, series: dict, ylabel: str, title: str, show_values: bool = False):
+    """`series`: {series_label: [value per class, aligned to class_names]}. One
+    cluster of bars per class, one bar per series within each cluster - e.g.
+    clean vs. a specific distortion severity, side by side per class.
+
+    `show_values`: annotate each bar with its numeric value. Off by default -
+    it clutters charts with many classes (e.g. 19 Cityscapes labels), but is
+    useful for small category counts like a per-task clean/distorted/restored
+    summary."""
+    fig, ax = plt.subplots(figsize=(max(6, len(class_names) * 1.2), 4))
+    n_series = len(series)
+    bar_width = 0.8 / n_series
+    x = np.arange(len(class_names))
+    for i, (label, values) in enumerate(series.items()):
+        offset = (i - (n_series - 1) / 2) * bar_width
+        bars = ax.bar(x + offset, values, bar_width, label=label)
+        if show_values:
+            ax.bar_label(bars, fmt="%.3f", fontsize=8, padding=2)
+    ax.set_xticks(x)
+    ax.set_xticklabels(class_names, rotation=45, ha="right")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend()
+    fig.tight_layout()
+    return fig
+
+
+def plot_metric_bars_by_condition(
+    condition_labels: list, values: list, bar_colors: list, ylabel: str, title: str,
+    reference_value: float = None, reference_label: str = "clean baseline",
+):
+    """Bar per (clean + distortion x severity level) condition, with an
+    optional horizontal dashed line for the clean baseline - the
+    severity-axis counterpart to plot_metric_vs_snr_by_distortion's SNR-axis
+    reference line. `bar_colors`: one color per condition, e.g. gray for
+    "clean" and a fixed color per distortion family so groups read at a
+    glance."""
+    fig, ax = plt.subplots(figsize=(max(8, len(condition_labels) * 0.55), 4.5))
+    ax.bar(condition_labels, values, color=bar_colors)
+    if reference_value is not None:
+        ax.axhline(
+            reference_value, linestyle="--", color="#d03b3b",
+            label=f"{reference_label} = {reference_value:.3f}",
+        )
+        ax.legend()
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.tick_params(axis="x", rotation=45)

@@ -8,6 +8,7 @@ torchvision
 ultralytics
 transformers
 torchmetrics
+pycocotools
 tqdm
 pyyaml
 requests

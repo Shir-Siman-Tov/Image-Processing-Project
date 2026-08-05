@@ -11,11 +11,16 @@ for this task in 02_clean_baseline and everything downstream.
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from ultralytics import YOLO
 
 from ipproj import config
-from ipproj.datasets.kitti import read_image
-from ipproj.metrics.detection_map import new_metric, to_torchmetrics_prediction, to_torchmetrics_target
+from ipproj.metrics.detection_map import (
+    new_metric,
+    suppress_dontcare_predictions,
+    to_torchmetrics_prediction,
+    to_torchmetrics_target,
+)
 
 
 def load_pretrained() -> YOLO:
@@ -57,7 +62,28 @@ def fine_tune(data_yaml: Path, run_name: str, epochs: int = config.YOLO_FINE_TUN
     return Path(results.save_dir) / "weights" / "best.pt"
 
 
-def predict(model: YOLO, image: np.ndarray, confidence: float = 0.25):
+def load_training_curve(checkpoint_path: Path) -> dict:
+    """Reads the per-epoch train/val loss history ultralytics wrote next to
+    `checkpoint_path` (weights/best.pt) during model.train(). Each loss is
+    the sum of that split's box/cls/dfl loss columns from results.csv.
+    """
+    results_csv = checkpoint_path.parent.parent / "results.csv"
+    if not results_csv.exists():
+        raise FileNotFoundError(
+            f"No results.csv next to {checkpoint_path} - was this checkpoint produced by model.train()?"
+        )
+    df = pd.read_csv(results_csv)
+    df.columns = df.columns.str.strip()
+    train_cols = [c for c in df.columns if c.startswith("train/") and c.endswith("_loss")]
+    val_cols = [c for c in df.columns if c.startswith("val/") and c.endswith("_loss")]
+    return {
+        "epoch": df["epoch"].astype(int).tolist(),
+        "train_loss": df[train_cols].sum(axis=1).tolist(),
+        "val_loss": df[val_cols].sum(axis=1).tolist(),
+    }
+
+
+def predict(model: YOLO, image: np.ndarray, confidence: float = config.YOLO_CONFIDENCE_THRESHOLD):
     """Returns (boxes[N,4] xyxy, classes: list[str], scores[N])."""
     result = model.predict(image, conf=confidence, verbose=False)[0]
     boxes = result.boxes.xyxy.cpu().numpy()
@@ -67,12 +93,24 @@ def predict(model: YOLO, image: np.ndarray, confidence: float = 0.25):
     return boxes, classes, scores
 
 
-def evaluate(model: YOLO, samples: list) -> dict:
-    """`samples`: list of kitti.DetectionSample. Returns per-class + overall mAP/IoU."""
+def evaluate(model: YOLO, samples: list, batch_size: int = config.YOLO_EVAL_BATCH_SIZE) -> dict:
+    """`samples`: list of kitti.DetectionSample. Returns per-class + overall mAP/IoU.
+
+    Runs inference through Ultralytics' own batched path (image paths, not
+    pre-loaded arrays) rather than one image at a time - YOLO handles its own
+    I/O/preprocessing per image and batches the GPU forward pass.
+    """
     metric = new_metric()
-    for sample in samples:
-        image = read_image(sample.image_path)
-        boxes, classes, scores = predict(model, image)
+    image_paths = [str(sample.image_path) for sample in samples]
+    results = model.predict(image_paths, batch=batch_size, conf=config.YOLO_CONFIDENCE_THRESHOLD, verbose=False)
+
+    for sample, result in zip(samples, results):
+        boxes = result.boxes.xyxy.cpu().numpy()
+        class_ids = result.boxes.cls.cpu().numpy().astype(int)
+        scores = result.boxes.conf.cpu().numpy()
+        classes = [model.names[i] for i in class_ids]
+        boxes, classes, scores = suppress_dontcare_predictions(boxes, classes, scores, sample.ignore_boxes)
+
         metric.update(
             [to_torchmetrics_prediction(boxes, classes, scores)],
             [to_torchmetrics_target(sample.boxes, sample.classes)],
