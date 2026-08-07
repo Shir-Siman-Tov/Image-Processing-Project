@@ -13,26 +13,29 @@ RANDOM_SEED = 42
 # On Colab, mount Drive first (see each notebook's setup cell) and point
 # DATA_ROOT/CHECKPOINT_ROOT there so large downloads/checkpoints survive
 # session loss - these are gitignored, never meant to enter the repo.
-# FIGURES_ROOT is different: it always lives inside the repo itself and is
-# NOT gitignored, because these PNGs are the README's visuals.
+# FIGURES_ROOT/REPORTS_ROOT are different: they always live inside the repo
+# itself and are NOT gitignored, because these PNGs/CSVs are the README's
+# visuals and result tables - see colab_sync.py for how they get from a
+# throwaway Colab clone back onto GitHub.
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 try:
     import google.colab  # noqa: F401
 
-    _IS_COLAB = True
+    IS_COLAB = True
 except ImportError:
-    _IS_COLAB = False
+    IS_COLAB = False
 
-if _IS_COLAB:
+if IS_COLAB:
     DATA_ROOT = Path("/content/drive/MyDrive/ipproj_data")
     CHECKPOINT_ROOT = Path("/content/drive/MyDrive/ipproj_checkpoints")
 else:
-    DATA_ROOT = _REPO_ROOT / "data"
-    CHECKPOINT_ROOT = _REPO_ROOT / "checkpoints"
+    DATA_ROOT = REPO_ROOT / "data"
+    CHECKPOINT_ROOT = REPO_ROOT / "checkpoints"
 
-FIGURES_ROOT = _REPO_ROOT / "figures"  # tracked in git - README-ready PNGs, saved via viz.plotting.save_figure()
+FIGURES_ROOT = REPO_ROOT / "figures"  # tracked in git - README-ready PNGs, saved via viz.plotting.save_figure()
+REPORTS_ROOT = REPO_ROOT / "results"  # tracked in git - README-ready metric tables, saved via reporting.save_results_csv()
 
 KITTI_ROOT = DATA_ROOT / "kitti"
 DISTORTED_ROOT = DATA_ROOT / "distorted"

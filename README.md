@@ -40,9 +40,16 @@ notebooks/            orchestration layer, run in order:
 
 Each notebook's first cell mounts Google Drive and clones/installs this repo, so downloaded KITTI data and trained checkpoints persist across sessions. Run the notebooks in order — later notebooks depend on artifacts (the fine-tuned YOLO checkpoint, results CSVs) saved by earlier ones.
 
+Each notebook's last cell also backs up `figures/`/`results/` to Drive and pushes them straight to GitHub (see "Figures" below) — that needs a GitHub personal access token (repo write scope), stored **once per Google account**:
+
+1. Create a token at [github.com/settings/tokens](https://github.com/settings/tokens) (classic token, `repo` scope is enough).
+2. In Colab, open the Secrets manager (key icon in the left sidebar), add a new secret named `GITHUB_TOKEN` with that token as the value, and enable "Notebook access".
+
+Every notebook run then auto-commits/pushes any new figures/results straight to `main` — no manual download/`git add` step needed.
+
 ## Figures
 
-Every plot in the notebooks is saved as a PNG under `figures/<notebook>/<name>.png` via `ipproj.viz.plotting.save_figure()`. Unlike `data/`/`checkpoints/` (gitignored, can be large), `figures/` is tracked in git — pull it down from Colab (or a Drive-synced copy) after a run, `git add figures/`, and embed directly in this README, e.g.:
+Every plot in the notebooks is saved as a PNG under `figures/<notebook>/<name>.png` via `ipproj.viz.plotting.save_figure()`. Unlike `data/`/`checkpoints/` (gitignored, can be large), `figures/` is tracked in git. Each notebook's setup cell clones this repo fresh into a throwaway Colab filesystem, so a final cell (`ipproj.colab_sync`) copies `figures/` and `results/` into Drive as a backup and commits+pushes them back to GitHub before the runtime disconnects — see "Running on Colab" above for the one-time token setup. Embed a figure directly in this README with standard markdown, e.g.:
 
 ```markdown
 ![Baseline detection mAP per class](figures/02_clean_baseline/detection_map_per_class.png)
@@ -50,4 +57,4 @@ Every plot in the notebooks is saved as a PNG under `figures/<notebook>/<name>.p
 
 ## Results
 
-_To be filled in as notebooks are run: baseline vs. distorted vs. restored vs. fine-tuned tables and plots, per task and per class._
+Per-notebook metric tables are saved as CSVs under `results/<notebook>/*.csv` via `ipproj.reporting.save_results_csv()` — tracked in git the same way `figures/` is, synced back from Colab by the same final-cell mechanism. Link/embed the relevant tables here as notebooks are run: baseline vs. distorted vs. restored vs. fine-tuned, per task and per class.

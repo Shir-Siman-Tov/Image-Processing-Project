@@ -144,7 +144,10 @@ def plot_bar_per_class(class_names: list, values: list, ylabel: str, title: str)
     return fig
 
 
-def plot_grouped_bar_per_class(class_names: list, series: dict, ylabel: str, title: str, show_values: bool = False):
+def plot_grouped_bar_per_class(
+    class_names: list, series: dict, ylabel: str, title: str, show_values: bool = False,
+    reference_value: float = None, reference_label: str = "clean baseline",
+):
     """`series`: {series_label: [value per class, aligned to class_names]}. One
     cluster of bars per class, one bar per series within each cluster - e.g.
     clean vs. a specific distortion severity, side by side per class.
@@ -152,7 +155,13 @@ def plot_grouped_bar_per_class(class_names: list, series: dict, ylabel: str, tit
     `show_values`: annotate each bar with its numeric value. Off by default -
     it clutters charts with many classes (e.g. 19 Cityscapes labels), but is
     useful for small category counts like a per-task clean/distorted/restored
-    summary."""
+    summary.
+
+    `reference_value`: optional float, drawn as a horizontal dashed line
+    (same convention as plot_metric_bars_by_condition) - for a value that's
+    constant across all classes/conditions (e.g. a clean baseline), a line is
+    clearer than a repeated identical bar in every cluster. Pass None to omit
+    it (default), which also keeps every existing call site unchanged."""
     fig, ax = plt.subplots(figsize=(max(6, len(class_names) * 1.2), 4))
     n_series = len(series)
     bar_width = 0.8 / n_series
@@ -162,6 +171,11 @@ def plot_grouped_bar_per_class(class_names: list, series: dict, ylabel: str, tit
         bars = ax.bar(x + offset, values, bar_width, label=label)
         if show_values:
             ax.bar_label(bars, fmt="%.3f", fontsize=8, padding=2)
+    if reference_value is not None:
+        ax.axhline(
+            reference_value, linestyle="--", color="#d03b3b",
+            label=f"{reference_label} = {reference_value:.3f}",
+        )
     ax.set_xticks(x)
     ax.set_xticklabels(class_names, rotation=45, ha="right")
     ax.set_ylabel(ylabel)
