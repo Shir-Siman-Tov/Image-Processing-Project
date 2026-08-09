@@ -47,12 +47,19 @@ def git_commit_and_push(message: str, token_secret_name: str = "GITHUB_TOKEN") -
     token = userdata.get(token_secret_name)
     repo_dir = str(config.REPO_ROOT)
 
+    # Not every notebook produces both - 01 only ever writes figures/, no
+    # results/ CSVs - and `git add` errors (exit 128) on a pathspec that
+    # doesn't exist on disk, so only add whichever of the two are present.
+    targets = [p.name for p in (config.FIGURES_ROOT, config.REPORTS_ROOT) if p.exists()]
+    if not targets:
+        return
+
     subprocess.run(
         ["git", "-C", repo_dir, "config", "user.email", "colab-sync@users.noreply.github.com"],
         check=True,
     )
     subprocess.run(["git", "-C", repo_dir, "config", "user.name", "Colab Auto-sync"], check=True)
-    subprocess.run(["git", "-C", repo_dir, "add", "figures", "results"], check=True)
+    subprocess.run(["git", "-C", repo_dir, "add", *targets], check=True)
 
     commit = subprocess.run(
         ["git", "-C", repo_dir, "commit", "-m", message], capture_output=True, text=True
