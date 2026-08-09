@@ -89,3 +89,18 @@ def read_image(path: Path) -> np.ndarray:
     if image is None:
         raise FileNotFoundError(f"Could not read image at {path}")
     return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+
+def read_segmentation_mask(path: Path) -> np.ndarray:
+    """Reads a KITTI Semantics GT mask and remaps Cityscapes' raw 34-class
+    label IDs to the 19-class "trainId" taxonomy (see
+    config.CITYSCAPES_ID_TO_TRAINID) that tasks.semantic_segmentation's model
+    and metric operate in - the raw ids can't be compared against trainId
+    predictions directly."""
+    raw = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+    if raw is None:
+        raise FileNotFoundError(f"Could not read segmentation mask at {path}")
+    lut = np.full(256, config.SEGFORMER_IGNORE_INDEX, dtype=np.uint8)
+    for raw_id, train_id in config.CITYSCAPES_ID_TO_TRAINID.items():
+        lut[raw_id] = train_id
+    return lut[raw]

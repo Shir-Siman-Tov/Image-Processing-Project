@@ -2,23 +2,25 @@
 
 Course grounding: 3_DeepSegmentation/4032_ImageSegmentation.
 
-KITTI Semantics reuses Cityscapes' 19-class "trainId" taxonomy, and
-config.SEGFORMER_CHECKPOINT is a Cityscapes-pretrained checkpoint - but the
-checkpoint's logit-index order is never assumed to match KITTI's GT mask IDs
-without checking. verify_class_alignment() must be run once during
-02_clean_baseline; if it returns False, config.SEGFORMER_CLASS_ID_REMAP must
-be populated before evaluate()'s results are trusted.
+KITTI Semantics reuses Cityscapes' 19-class "trainId" taxonomy for the
+purposes of this project, but its GT mask *files* store Cityscapes' raw
+34-class label IDs - datasets.kitti.read_segmentation_mask() remaps those to
+trainIds (config.CITYSCAPES_ID_TO_TRAINID) before anything here sees them.
+Separately, config.SEGFORMER_CHECKPOINT is a Cityscapes-pretrained checkpoint
+whose logit-index order is never assumed to match that trainId order without
+checking. verify_class_alignment() must be run once during 02_clean_baseline;
+if it returns False, config.SEGFORMER_CLASS_ID_REMAP must be populated before
+evaluate()'s results are trusted.
 """
 from pathlib import Path
 
-import cv2
 import numpy as np
 import pandas as pd
 import torch
 from transformers import SegformerForSemanticSegmentation, SegformerImageProcessor
 
 from ipproj import config
-from ipproj.datasets.kitti import read_image
+from ipproj.datasets.kitti import read_image, read_segmentation_mask
 from ipproj.metrics.segmentation_iou import new_metric
 
 NUM_CLASSES = len(config.CITYSCAPES_TRAINID_LABELS)
@@ -60,7 +62,7 @@ def evaluate(model, processor, samples: list) -> torch.Tensor:
     for sample in samples:
         image = read_image(sample.image_path)
         pred = predict(model, processor, image)
-        gt = cv2.imread(str(sample.mask_path), cv2.IMREAD_UNCHANGED)
+        gt = read_segmentation_mask(sample.mask_path)
         metric.update(torch.as_tensor(pred), torch.as_tensor(gt.astype(np.int64)))
     return metric.compute()
 
@@ -76,7 +78,7 @@ def checkpoint_path_for(run_name: str) -> Path:
 
 def _forward_loss(model, processor, sample) -> torch.Tensor:
     image = read_image(sample.image_path)
-    gt = cv2.imread(str(sample.mask_path), cv2.IMREAD_UNCHANGED)
+    gt = read_segmentation_mask(sample.mask_path)
     inputs = processor(images=image, return_tensors="pt").to(DEVICE)
     labels = torch.as_tensor(gt, dtype=torch.long, device=DEVICE)[None]
     return model(**inputs, labels=labels).loss

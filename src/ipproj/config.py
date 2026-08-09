@@ -143,3 +143,22 @@ SEGFORMER_CLASS_ID_REMAP = None
 # Cityscapes' void/unlabeled trainId - also HF SegformerConfig's default
 # semantic_loss_ignore_index, so eval metric and fine-tune loss share one value.
 SEGFORMER_IGNORE_INDEX = 255
+
+# KITTI Semantics' training/semantic/ masks store Cityscapes' raw 34-class
+# label IDs (the cityscapesscripts labels.py "id" column) - NOT the 19-class
+# "trainId" taxonomy CITYSCAPES_TRAINID_LABELS above uses. datasets.kitti's
+# mask reader remaps id -> trainId (255 = void/ignore, matching
+# SEGFORMER_IGNORE_INDEX) before any mask reaches the model/metric.
+# Values cross-checked verbatim against {l.id: l.trainId for l in labels}
+# from the official `cityscapesscripts` package (pip install cityscapesscripts;
+# cityscapesscripts.helpers.labels) on 2026-08-09 - not hand-derived from memory.
+# Not kept as a runtime dependency since this static table is all we need from it.
+CITYSCAPES_ID_TO_TRAINID = {
+    0: 255, 1: 255, 2: 255, 3: 255, 4: 255, 5: 255, 6: 255,
+    7: 0, 8: 1, 9: 255, 10: 255,
+    11: 2, 12: 3, 13: 4, 14: 255, 15: 255, 16: 255, 17: 5, 18: 255,
+    19: 6, 20: 7,
+    21: 8, 22: 9, 23: 10,
+    24: 11, 25: 12, 26: 13, 27: 14, 28: 15, 29: 255, 30: 255,
+    31: 16, 32: 17, 33: 18,
+}
