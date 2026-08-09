@@ -1,0 +1,10 @@
+task,metric,value
+feature_matching,mean_orb_keypoints_clean,1000.0
+feature_matching,match_accuracy,1.0
+optical_flow,epe,28.64805009762446
+optical_flow,fl_error,0.5580259514526347
+object_detection,map,0.2601185142993927
+object_detection,map_50,0.4170803427696228
+object_detection,map_75,0.2821118235588074
+object_detection,mar_100,0.30138906836509705
+semantic_segmentation,mean_iou,0.3874163031578064
