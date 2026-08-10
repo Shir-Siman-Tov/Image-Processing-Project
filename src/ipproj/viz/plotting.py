@@ -98,8 +98,16 @@ def plot_before_after(before: np.ndarray, after: np.ndarray, title_before: str =
     return fig
 
 
-def plot_metric_vs_intensity(intensity_values: list, metric_series: dict, xlabel: str, ylabel: str, title: str):
-    """`metric_series`: {series_label: [metric value per intensity]}."""
+def plot_metric_vs_intensity(
+    intensity_values: list, metric_series: dict, xlabel: str, ylabel: str, title: str, invert_xaxis: bool = False,
+):
+    """`metric_series`: {series_label: [metric value per intensity]}.
+
+    `invert_xaxis`: flip the x-axis direction, e.g. for an SNR (dB) x-axis
+    where higher = less distortion - inverting makes distortion severity
+    increase left-to-right, matching how the other curves in this module
+    read. Off by default since most callers use a naturally-ascending x-axis
+    (epoch, distortion intensity level)."""
     fig, ax = plt.subplots(figsize=(6, 4))
     for label, values in metric_series.items():
         ax.plot(intensity_values, values, marker="o", label=label)
@@ -107,18 +115,22 @@ def plot_metric_vs_intensity(intensity_values: list, metric_series: dict, xlabel
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.legend()
+    if invert_xaxis:
+        ax.invert_xaxis()
     fig.tight_layout()
     return fig
 
 
 def plot_metric_vs_snr_by_distortion(
-    snr_by_distortion: dict, metric_by_distortion: dict, clean_reference: float, xlabel: str, ylabel: str, title: str
+    snr_by_distortion: dict, metric_by_distortion: dict, clean_reference: float, xlabel: str, ylabel: str, title: str,
+    invert_xaxis: bool = False,
 ):
     """One curve per distortion, each with its own SNR x-values (distortions
     degrade SNR at different rates, so a shared x-axis like
     `plot_metric_vs_intensity` doesn't fit). `clean_reference`: optional
     float, drawn as a horizontal dashed line; pass None to omit it (e.g.
-    metrics with no meaningful clean-only baseline)."""
+    metrics with no meaningful clean-only baseline). `invert_xaxis`: see
+    `plot_metric_vs_intensity`."""
     fig, ax = plt.subplots(figsize=(6, 4))
     for name, snr_values in snr_by_distortion.items():
         metric_values = metric_by_distortion[name]
@@ -130,6 +142,8 @@ def plot_metric_vs_snr_by_distortion(
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.legend()
+    if invert_xaxis:
+        ax.invert_xaxis()
     fig.tight_layout()
     return fig
 
