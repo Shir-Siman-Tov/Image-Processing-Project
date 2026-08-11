@@ -100,6 +100,7 @@ def plot_before_after(before: np.ndarray, after: np.ndarray, title_before: str =
 
 def plot_metric_vs_intensity(
     intensity_values: list, metric_series: dict, xlabel: str, ylabel: str, title: str, invert_xaxis: bool = False,
+    ax: plt.Axes = None,
 ):
     """`metric_series`: {series_label: [metric value per intensity]}.
 
@@ -107,8 +108,16 @@ def plot_metric_vs_intensity(
     where higher = less distortion - inverting makes distortion severity
     increase left-to-right, matching how the other curves in this module
     read. Off by default since most callers use a naturally-ascending x-axis
-    (epoch, distortion intensity level)."""
-    fig, ax = plt.subplots(figsize=(6, 4))
+    (epoch, distortion intensity level).
+
+    `ax`: draw onto an existing axes (e.g. one panel of a multi-plot grid)
+    instead of creating a standalone figure - same opt-in convention as
+    `plot_detection_boxes`/`plot_optical_flow`/etc. below. When omitted
+    (default), a new figure is created and returned, unchanged from before;
+    when supplied, the axes is drawn on and returned instead."""
+    owns_fig = ax is None
+    if owns_fig:
+        fig, ax = plt.subplots(figsize=(6, 4))
     for label, values in metric_series.items():
         ax.plot(intensity_values, values, marker="o", label=label)
     ax.set_xlabel(xlabel)
@@ -117,21 +126,25 @@ def plot_metric_vs_intensity(
     ax.legend()
     if invert_xaxis:
         ax.invert_xaxis()
-    fig.tight_layout()
-    return fig
+    if owns_fig:
+        fig.tight_layout()
+        return fig
+    return ax
 
 
 def plot_metric_vs_snr_by_distortion(
     snr_by_distortion: dict, metric_by_distortion: dict, clean_reference: float, xlabel: str, ylabel: str, title: str,
-    invert_xaxis: bool = False,
+    invert_xaxis: bool = False, ax: plt.Axes = None,
 ):
     """One curve per distortion, each with its own SNR x-values (distortions
     degrade SNR at different rates, so a shared x-axis like
     `plot_metric_vs_intensity` doesn't fit). `clean_reference`: optional
     float, drawn as a horizontal dashed line; pass None to omit it (e.g.
-    metrics with no meaningful clean-only baseline). `invert_xaxis`: see
-    `plot_metric_vs_intensity`."""
-    fig, ax = plt.subplots(figsize=(6, 4))
+    metrics with no meaningful clean-only baseline). `invert_xaxis`, `ax`:
+    see `plot_metric_vs_intensity`."""
+    owns_fig = ax is None
+    if owns_fig:
+        fig, ax = plt.subplots(figsize=(6, 4))
     for name, snr_values in snr_by_distortion.items():
         metric_values = metric_by_distortion[name]
         order = np.argsort(snr_values)
@@ -144,8 +157,10 @@ def plot_metric_vs_snr_by_distortion(
     ax.legend()
     if invert_xaxis:
         ax.invert_xaxis()
-    fig.tight_layout()
-    return fig
+    if owns_fig:
+        fig.tight_layout()
+        return fig
+    return ax
 
 
 def plot_bar_per_class(class_names: list, values: list, ylabel: str, title: str):
