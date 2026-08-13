@@ -175,7 +175,7 @@ def plot_bar_per_class(class_names: list, values: list, ylabel: str, title: str)
 
 def plot_grouped_bar_per_class(
     class_names: list, series: dict, ylabel: str, title: str, show_values: bool = False,
-    reference_value: float = None, reference_label: str = "clean baseline",
+    reference_value: float = None, reference_label: str = "clean baseline", ax: plt.Axes = None,
 ):
     """`series`: {series_label: [value per class, aligned to class_names]}. One
     cluster of bars per class, one bar per series within each cluster - e.g.
@@ -190,8 +190,16 @@ def plot_grouped_bar_per_class(
     (same convention as plot_metric_bars_by_condition) - for a value that's
     constant across all classes/conditions (e.g. a clean baseline), a line is
     clearer than a repeated identical bar in every cluster. Pass None to omit
-    it (default), which also keeps every existing call site unchanged."""
-    fig, ax = plt.subplots(figsize=(max(6, len(class_names) * 1.2), 4))
+    it (default), which also keeps every existing call site unchanged.
+
+    `ax`: draw onto an existing axes (e.g. one panel of a multi-plot grid)
+    instead of creating a standalone figure - same opt-in convention as
+    `plot_metric_vs_intensity`. When omitted (default), a new figure is
+    created and returned, unchanged from before; when supplied, the axes is
+    drawn on and returned instead."""
+    owns_fig = ax is None
+    if owns_fig:
+        fig, ax = plt.subplots(figsize=(max(6, len(class_names) * 1.2), 4))
     n_series = len(series)
     bar_width = 0.8 / n_series
     x = np.arange(len(class_names))
@@ -210,8 +218,10 @@ def plot_grouped_bar_per_class(
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.legend()
-    fig.tight_layout()
-    return fig
+    if owns_fig:
+        fig.tight_layout()
+        return fig
+    return ax
 
 
 def plot_metric_bars_by_condition(
