@@ -98,7 +98,7 @@ JPEG_QUALITY_LEVELS = [80, 60, 40, 20, 10]  # lower = more compression artifacts
 
 MEDIAN_FILTER_KERNEL_SIZE = 5
 DECONVOLUTION_SNR_ESTIMATE = 0.01  # Wiener filter noise-to-signal assumption
-BILATERAL_FILTER_PARAMS = {"d": 9, "sigma_color": 75, "sigma_space": 75}
+BILATERAL_FILTER_PARAMS = {"d": 9, "sigmaColor": 75, "sigmaSpace": 75}  # cv2's Python binding keeps the C++ camelCase kwarg names
 INTERPOLATION_SCALE = 2  # upsample factor before bilateral filtering, per the assignment's example
 
 # --- Task hyperparameters ---------------------------------------------------
