@@ -8,6 +8,7 @@ import dataclasses
 from pathlib import Path
 
 import cv2
+from tqdm.auto import tqdm
 
 from ipproj.datasets.kitti import read_image
 
@@ -21,10 +22,14 @@ def materialize_transformed(samples: list, transform, output_dir: Path, name_pre
     multi-distortion/multi-severity fine-tuning, notebook 05) - without it, two
     variants of the same source image would share a filename and downstream
     dedup-by-name logic (kitti_yolo_format.convert_split_to_yolo) would silently
-    keep only one. Default "" preserves single-variant call sites unchanged."""
+    keep only one. Default "" preserves single-variant call sites unchanged.
+
+    Reports progress via tqdm - this loop round-trips through disk (and, on
+    Colab, often a Drive mount) once per sample, so silently sitting through
+    it on a large split is easy to mistake for a hang."""
     output_dir.mkdir(parents=True, exist_ok=True)
     new_samples = []
-    for sample in samples:
+    for sample in tqdm(samples, desc=f"materializing {output_dir.name}", unit="img", leave=False):
         image = read_image(sample.image_path)
         transformed = transform(image)
         out_path = output_dir / f"{name_prefix}{sample.image_path.name}"

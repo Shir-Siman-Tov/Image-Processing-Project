@@ -30,9 +30,17 @@ except ImportError:
 if IS_COLAB:
     DATA_ROOT = Path("/content/drive/MyDrive/ipproj_data")
     CHECKPOINT_ROOT = Path("/content/drive/MyDrive/ipproj_checkpoints")
+    # Colab's own local disk (not Drive-mounted) - orders of magnitude faster
+    # for many-small-file read/write than the Drive FUSE mount, but wiped on
+    # every runtime restart. Only safe for outputs that are cheap/deterministic
+    # to regenerate (e.g. materialize_transformed() calls whose inputs are
+    # already-downloaded clean images + a pure distortion function) - never
+    # for trained checkpoints, which must survive a restart (see CHECKPOINT_ROOT).
+    SCRATCH_ROOT = Path("/content/scratch")
 else:
     DATA_ROOT = REPO_ROOT / "data"
     CHECKPOINT_ROOT = REPO_ROOT / "checkpoints"
+    SCRATCH_ROOT = DATA_ROOT / "scratch"  # already local outside Colab - same rationale, no speed difference here
 
 FIGURES_ROOT = REPO_ROOT / "figures"  # tracked in git - README-ready PNGs, saved via viz.plotting.save_figure()
 REPORTS_ROOT = REPO_ROOT / "results"  # tracked in git - README-ready metric tables, saved via reporting.save_results_csv()
