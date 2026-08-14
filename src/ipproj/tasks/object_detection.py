@@ -37,28 +37,44 @@ def checkpoint_path_for(run_name: str) -> Path:
     return config.CHECKPOINT_ROOT / "yolo" / run_name / "weights" / "best.pt"
 
 
-def fine_tune(data_yaml: Path, run_name: str, epochs: int = config.YOLO_FINE_TUNE_EPOCHS) -> Path:
-    """Fine-tunes YOLO's head on config.KITTI_DETECTION_CLASSES.
+def fine_tune(
+    data_yaml: Path, run_name: str, epochs: int = config.YOLO_FINE_TUNE_EPOCHS, start_weights: Path | str | None = None
+) -> Path:
+    """Fine-tunes YOLO's head on config.KITTI_DETECTION_CLASSES, starting from
+    `start_weights` (defaults to config.YOLO_BASE_WEIGHTS via load_pretrained()
+    - e.g. 02_clean_baseline adapting raw COCO weights). Callers continuing an
+    already-adapted checkpoint (e.g. 05_finetuning_distorted continuing
+    02's clean-adapted checkpoint) pass that checkpoint's path explicitly.
     `data_yaml` comes from datasets.kitti_yolo_format.build_yolo_dataset().
     Returns the path to the resulting best.pt checkpoint.
 
-    Skips training and returns the existing checkpoint if `run_name` was
-    already fine-tuned before. CHECKPOINT_ROOT lives on Drive on Colab, so a
-    runtime restart (which wipes the kernel but not Drive) would otherwise
-    silently redo an expensive training run on every rerun.
+    Skips training and returns the existing checkpoint if `run_name` already
+    finished fine-tuning. If `run_name` was interrupted mid-run (e.g. a Colab
+    disconnect) - detected via a `last.pt` Ultralytics writes every epoch -
+    resumes from there instead of restarting at epoch 1. CHECKPOINT_ROOT
+    lives on Drive on Colab, so both the finished checkpoint and the
+    in-progress `last.pt` survive a runtime restart.
     """
     checkpoint_path = checkpoint_path_for(run_name)
     if checkpoint_path.exists():
         return checkpoint_path
 
-    model = load_pretrained()
-    results = model.train(
-        data=str(data_yaml),
-        epochs=epochs,
-        seed=config.RANDOM_SEED,
-        project=str(config.CHECKPOINT_ROOT / "yolo"),
-        name=run_name,
-    )
+    last_checkpoint = checkpoint_path.parent / "last.pt"
+    if last_checkpoint.exists():
+        model = YOLO(last_checkpoint)
+        # resume=True makes ultralytics restore data/epochs/optimizer state
+        # from the interrupted run's own saved args - re-passing them here
+        # would be ignored (and risks drifting from what that run actually used).
+        results = model.train(resume=True)
+    else:
+        model = YOLO(start_weights) if start_weights is not None else load_pretrained()
+        results = model.train(
+            data=str(data_yaml),
+            epochs=epochs,
+            seed=config.RANDOM_SEED,
+            project=str(config.CHECKPOINT_ROOT / "yolo"),
+            name=run_name,
+        )
     return Path(results.save_dir) / "weights" / "best.pt"
 
 

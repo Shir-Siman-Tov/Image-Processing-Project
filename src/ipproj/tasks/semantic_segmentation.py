@@ -101,28 +101,45 @@ def fine_tune(model, processor, train_samples: list, val_samples: list, run_name
     object_detection.fine_tune()'s YOLO checkpoints already do.
 
     Skips training and reloads the existing checkpoint's weights into `model`
-    if `run_name` was already fine-tuned before (same idempotency guard as
-    object_detection.fine_tune()). Returns (checkpoint_path, history_df) with
-    one row per epoch: epoch, train_loss, val_loss. On the skip path,
-    history_df is read back from the checkpoint's saved history.csv.
+    if `run_name` already finished fine-tuning (history.csv is only written
+    on completion, so it's the finished-run marker). If `run_name` was
+    interrupted mid-run (e.g. a Colab disconnect), resumes from the
+    `in_progress.pt` snapshot written after each epoch, rather than
+    restarting at epoch 1 - unlike Ultralytics, HF/torch has no built-in
+    per-epoch checkpoint format, so this hand-rolls the same last.pt-style
+    resume object_detection.fine_tune() gets from Ultralytics directly.
+    Returns (checkpoint_path, history_df) with one row per epoch: epoch,
+    train_loss, val_loss. On the skip path, history_df is read back from the
+    checkpoint's saved history.csv.
     """
     checkpoint_path = checkpoint_path_for(run_name)
     history_path = checkpoint_path / "history.csv"
+    in_progress_path = checkpoint_path / "in_progress.pt"
 
-    if checkpoint_path.exists():
+    if history_path.exists():
         loaded = SegformerForSemanticSegmentation.from_pretrained(checkpoint_path).to(DEVICE)
         model.load_state_dict(loaded.state_dict())
         model.eval()
         return checkpoint_path, pd.read_csv(history_path)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
-    torch.manual_seed(config.RANDOM_SEED)
 
-    best_val_loss = float("inf")
-    best_state_dict = {name: tensor.detach().cpu().clone() for name, tensor in model.state_dict().items()}
-    history = []
+    if in_progress_path.exists():
+        snapshot = torch.load(in_progress_path, map_location=DEVICE)
+        model.load_state_dict(snapshot["model_state_dict"])
+        optimizer.load_state_dict(snapshot["optimizer_state_dict"])
+        best_val_loss = snapshot["best_val_loss"]
+        best_state_dict = snapshot["best_state_dict"]
+        history = snapshot["history"]
+        start_epoch = len(history) + 1
+    else:
+        torch.manual_seed(config.RANDOM_SEED)
+        best_val_loss = float("inf")
+        best_state_dict = {name: tensor.detach().cpu().clone() for name, tensor in model.state_dict().items()}
+        history = []
+        start_epoch = 1
 
-    for epoch in range(1, epochs + 1):
+    for epoch in range(start_epoch, epochs + 1):
         model.train()
         train_loss_sum = 0.0
         for sample in train_samples:
@@ -146,6 +163,18 @@ def fine_tune(model, processor, train_samples: list, val_samples: list, run_name
             best_val_loss = val_loss
             best_state_dict = {name: tensor.detach().cpu().clone() for name, tensor in model.state_dict().items()}
 
+        checkpoint_path.mkdir(parents=True, exist_ok=True)
+        torch.save(
+            {
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "best_val_loss": best_val_loss,
+                "best_state_dict": best_state_dict,
+                "history": history,
+            },
+            in_progress_path,
+        )
+
     model.load_state_dict(best_state_dict)
     model.eval()
 
@@ -154,5 +183,6 @@ def fine_tune(model, processor, train_samples: list, val_samples: list, run_name
     processor.save_pretrained(checkpoint_path)
     history_df = pd.DataFrame(history)
     history_df.to_csv(history_path, index=False)
+    in_progress_path.unlink(missing_ok=True)
 
     return checkpoint_path, history_df
