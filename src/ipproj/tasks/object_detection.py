@@ -37,6 +37,18 @@ def checkpoint_path_for(run_name: str) -> Path:
     return config.CHECKPOINT_ROOT / "yolo" / run_name / "weights" / "best.pt"
 
 
+def _last_completed_epoch(run_dir: Path) -> int:
+    """Highest epoch number appearing in `run_dir`/results.csv, or 0 if the
+    run hasn't produced one yet. Ultralytics appends a row after every epoch
+    (not just at the end), so this reflects true progress even mid-run."""
+    results_csv = run_dir / "results.csv"
+    if not results_csv.exists():
+        return 0
+    df = pd.read_csv(results_csv)
+    df.columns = df.columns.str.strip()
+    return int(df["epoch"].max()) if len(df) else 0
+
+
 def fine_tune(
     data_yaml: Path, run_name: str, epochs: int = config.YOLO_FINE_TUNE_EPOCHS, start_weights: Path | str | None = None
 ) -> Path:
@@ -49,14 +61,19 @@ def fine_tune(
     Returns the path to the resulting best.pt checkpoint.
 
     Skips training and returns the existing checkpoint if `run_name` already
-    finished fine-tuning. If `run_name` was interrupted mid-run (e.g. a Colab
-    disconnect) - detected via a `last.pt` Ultralytics writes every epoch -
-    resumes from there instead of restarting at epoch 1. CHECKPOINT_ROOT
-    lives on Drive on Colab, so both the finished checkpoint and the
-    in-progress `last.pt` survive a runtime restart.
+    finished fine-tuning - checked via results.csv reaching `epochs`, not just
+    best.pt existing, since Ultralytics writes best.pt on every fitness
+    improvement, not only at completion (a run interrupted at epoch 45/50
+    already has a best.pt from some earlier epoch - treating that alone as
+    "done" would silently hand back an under-trained checkpoint and never
+    train epochs 46-50). If `run_name` was interrupted mid-run (e.g. a Colab
+    disconnect), resumes from `last.pt` (which Ultralytics writes every
+    epoch) instead of restarting at epoch 1. CHECKPOINT_ROOT lives on Drive
+    on Colab, so both checkpoints survive a runtime restart.
     """
     checkpoint_path = checkpoint_path_for(run_name)
-    if checkpoint_path.exists():
+    run_dir = checkpoint_path.parent.parent
+    if checkpoint_path.exists() and _last_completed_epoch(run_dir) >= epochs:
         return checkpoint_path
 
     last_checkpoint = checkpoint_path.parent / "last.pt"
