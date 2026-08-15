@@ -91,6 +91,14 @@ def fine_tune(
             seed=config.RANDOM_SEED,
             project=str(config.CHECKPOINT_ROOT / "yolo"),
             name=run_name,
+            # Without this, Ultralytics silently renames the run to
+            # "{run_name}-2", "-3", ... whenever a directory named `run_name`
+            # already exists (e.g. a prior interrupted attempt) instead of
+            # reusing it - and every check above only ever looks at the fixed
+            # checkpoint_path_for(run_name) path, so a renamed run's progress
+            # would become permanently invisible to future calls, silently
+            # restarting from `start_weights` every time instead of resuming.
+            exist_ok=True,
         )
     return Path(results.save_dir) / "weights" / "best.pt"
 
