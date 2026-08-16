@@ -47,6 +47,18 @@ Each notebook's last cell also backs up `figures/`/`results/` to Drive and pushe
 
 Every notebook run then auto-commits/pushes any new figures/results straight to `main` — no manual download/`git add` step needed.
 
+## Running locally (e.g. a different GPU machine)
+
+`git clone`-ing this repo only gets you the code — `data/` and `checkpoints/` are gitignored (KITTI and trained weights are both too large for git), so a fresh clone has neither the dataset nor any trained checkpoint. `config.py` already auto-detects it's not running on Colab and points `DATA_ROOT`/`CHECKPOINT_ROOT` at local `data/`/`checkpoints/` instead of Drive — no code changes needed — but you do need to set the environment and data up yourself:
+
+1. `git clone` the repo, then `pip install -e .`.
+2. Install a CUDA build of `torch`/`torchvision` matching your GPU driver **before** installing the rest of the requirements — `requirements.txt` lists `torch`/`torchvision` unpinned, so installing it first typically resolves a CPU-only wheel and silently wastes the GPU. Use [pytorch.org's install selector](https://pytorch.org/get-started/locally/) for the right command, then run `pip install -r requirements.txt` for everything else.
+3. Copy the following from Google Drive into this repo's local folders, matching the layout exactly (these are the same paths Colab used, under `ipproj_data`/`ipproj_checkpoints` at your Drive root):
+   - `ipproj_data/kitti/` → `data/kitti/` (the downloaded KITTI archives — skips re-downloading in notebook 01)
+   - `ipproj_data/results/*.csv` → `data/results/` (per-notebook metric CSVs later notebooks read — not the same as the git-tracked `results/` above)
+   - `ipproj_checkpoints/` → `checkpoints/` (every trained checkpoint so far)
+4. Run the notebooks in order in VS Code's Jupyter extension (or `jupyter lab`). Each notebook's setup cell only mounts Drive/clones/installs on Colab (guarded by an `IN_COLAB` check) — it's a no-op locally, nothing to edit. Cells still need to *execute* to rebuild variables in the new kernel, but training itself is skipped wherever a matching checkpoint was copied over in step 3 — `tasks.object_detection.fine_tune()` and `tasks.semantic_segmentation.fine_tune()` are both idempotent and detect already-finished (or partially-finished, resumable) runs before doing any GPU work.
+
 ## Figures
 
 Every plot in the notebooks is saved as a PNG under `figures/<notebook>/<name>.png` via `ipproj.viz.plotting.save_figure()`. Unlike `data/`/`checkpoints/` (gitignored, can be large), `figures/` is tracked in git. Each notebook's setup cell clones this repo fresh into a throwaway Colab filesystem, so a final cell (`ipproj.colab_sync`) copies `figures/` and `results/` into Drive as a backup and commits+pushes them back to GitHub before the runtime disconnects — see "Running on Colab" above for the one-time token setup. Embed a figure directly in this README with standard markdown, e.g.:

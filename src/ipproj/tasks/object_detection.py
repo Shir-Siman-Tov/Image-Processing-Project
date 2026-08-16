@@ -8,6 +8,7 @@ fine-tuned on KITTI's own classes (config.KITTI_DETECTION_CLASSES) first;
 that fine-tuned checkpoint, not the raw COCO one, is what "baseline" means
 for this task in 02_clean_baseline and everything downstream.
 """
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -49,6 +50,67 @@ def _last_completed_epoch(run_dir: Path) -> int:
     return int(df["epoch"].max()) if len(df) else 0
 
 
+def _reconcile(canonical_dir: Path, other_dir: Path) -> None:
+    """Folds `other_dir`'s progress into `canonical_dir` - every check in
+    fine_tune() only ever looks at canonical_dir, but `model.train(resume=True)`
+    writes its output to whatever run name got baked into the checkpoint's own
+    saved args back when that run was first created (e.g. "finetuned_blended-3",
+    if "finetuned_blended"/"-2" happened to be taken at that moment), not
+    necessarily canonical_dir - and renaming a directory on disk doesn't change
+    that baked-in name, so every future resume of the same checkpoint keeps
+    landing in that same original spot.
+
+    Merges results.csv (deduped by epoch, so calling this twice is a no-op),
+    copies weights/best.pt over only if other_dir has one (a resumed tail may
+    legitimately have none, if nothing in it beat the fitness already baked
+    into the checkpoint it resumed from - canonical's existing best.pt, from
+    before this merge, is then still the right one), and always copies
+    weights/last.pt (that should track the most recent state regardless of
+    which directory it happened to land in).
+    """
+    if other_dir == canonical_dir:
+        return
+
+    other_results = other_dir / "results.csv"
+    if other_results.exists():
+        other_df = pd.read_csv(other_results)
+        other_df.columns = other_df.columns.str.strip()
+        canonical_results = canonical_dir / "results.csv"
+        if canonical_results.exists():
+            canonical_df = pd.read_csv(canonical_results)
+            canonical_df.columns = canonical_df.columns.str.strip()
+            merged = pd.concat([canonical_df[~canonical_df["epoch"].isin(other_df["epoch"])], other_df])
+            merged = merged.sort_values("epoch")
+        else:
+            merged = other_df
+        canonical_dir.mkdir(parents=True, exist_ok=True)
+        merged.to_csv(canonical_results, index=False)
+
+    (canonical_dir / "weights").mkdir(parents=True, exist_ok=True)
+    other_best = other_dir / "weights" / "best.pt"
+    if other_best.exists():
+        shutil.copy2(other_best, canonical_dir / "weights" / "best.pt")
+    other_last = other_dir / "weights" / "last.pt"
+    if other_last.exists():
+        shutil.copy2(other_last, canonical_dir / "weights" / "last.pt")
+
+
+def _reconcile_furthest_sibling(run_name: str, canonical_dir: Path) -> None:
+    """Self-heals a canonical_dir left stale by a crash between a resumed
+    run finishing and fine_tune() reconciling it (see _reconcile) - scans for
+    any "{run_name}*" directory further along than canonical_dir and folds it
+    in, so a rerun doesn't redo already-completed epochs. No-op (and cheap)
+    when nothing is ahead, e.g. every call for a run_name that never hit this."""
+    canonical_epoch = _last_completed_epoch(canonical_dir)
+    for sibling in config.CHECKPOINT_ROOT.joinpath("yolo").glob(f"{run_name}*"):
+        if sibling == canonical_dir or not sibling.is_dir():
+            continue
+        sibling_epoch = _last_completed_epoch(sibling)
+        if sibling_epoch > canonical_epoch:
+            _reconcile(canonical_dir, sibling)
+            canonical_epoch = sibling_epoch
+
+
 def fine_tune(
     data_yaml: Path, run_name: str, epochs: int = config.YOLO_FINE_TUNE_EPOCHS, start_weights: Path | str | None = None
 ) -> Path:
@@ -73,6 +135,8 @@ def fine_tune(
     """
     checkpoint_path = checkpoint_path_for(run_name)
     run_dir = checkpoint_path.parent.parent
+    _reconcile_furthest_sibling(run_name, run_dir)
+
     if checkpoint_path.exists() and _last_completed_epoch(run_dir) >= epochs:
         return checkpoint_path
 
@@ -82,7 +146,12 @@ def fine_tune(
         # resume=True makes ultralytics restore data/epochs/optimizer state
         # from the interrupted run's own saved args - re-passing them here
         # would be ignored (and risks drifting from what that run actually used).
+        # It may also write output under a different directory than run_dir
+        # (see _reconcile's docstring), hence folding it back in below rather
+        # than trusting results.save_dir directly.
         results = model.train(resume=True)
+        _reconcile(run_dir, Path(results.save_dir))
+        return checkpoint_path
     else:
         model = YOLO(start_weights) if start_weights is not None else load_pretrained()
         results = model.train(
