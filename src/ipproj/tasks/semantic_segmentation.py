@@ -17,6 +17,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+from tqdm.auto import tqdm
 from transformers import SegformerForSemanticSegmentation, SegformerImageProcessor
 
 from ipproj import config
@@ -59,7 +60,7 @@ def predict(model, processor, image: np.ndarray) -> np.ndarray:
 def evaluate(model, processor, samples: list) -> torch.Tensor:
     """`samples`: list of kitti.SegmentationSample. Returns per-class IoU tensor."""
     metric = new_metric(NUM_CLASSES, ignore_index=config.SEGFORMER_IGNORE_INDEX)
-    for sample in samples:
+    for sample in tqdm(samples, desc="evaluating", unit="img", leave=False):
         image = read_image(sample.image_path)
         pred = predict(model, processor, image)
         gt = read_segmentation_mask(sample.mask_path)
@@ -140,9 +141,13 @@ def fine_tune(model, processor, train_samples: list, val_samples: list, run_name
         start_epoch = 1
 
     for epoch in range(start_epoch, epochs + 1):
+        # No batching (see docstring) means this is samples-many individual
+        # forward/backward passes with nothing else printed in between - on
+        # CPU in particular that's easily minutes to hours of dead air
+        # without a progress bar, indistinguishable from a hang.
         model.train()
         train_loss_sum = 0.0
-        for sample in train_samples:
+        for sample in tqdm(train_samples, desc=f"epoch {epoch}/{epochs} - train", unit="img", leave=False):
             loss = _forward_loss(model, processor, sample)
             loss.backward()
             optimizer.step()
@@ -153,7 +158,7 @@ def fine_tune(model, processor, train_samples: list, val_samples: list, run_name
         model.eval()
         val_loss_sum = 0.0
         with torch.no_grad():
-            for sample in val_samples:
+            for sample in tqdm(val_samples, desc=f"epoch {epoch}/{epochs} - val", unit="img", leave=False):
                 val_loss_sum += _forward_loss(model, processor, sample).item()
         val_loss = val_loss_sum / max(len(val_samples), 1)
 
