@@ -100,6 +100,17 @@ def read_segmentation_mask(path: Path) -> np.ndarray:
     raw = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
     if raw is None:
         raise FileNotFoundError(f"Could not read segmentation mask at {path}")
+    if raw.ndim == 3:
+        # cv2.imread(..., IMREAD_UNCHANGED) is inconsistent across OpenCV
+        # versions about squeezing single-channel PNGs: some builds return
+        # (H, W), others (H, W, 1) - opencv-python is unpinned in
+        # requirements.txt, so which one you get depends on the machine.
+        # KITTI's semantic masks are single-channel label-id images, so
+        # squeeze the trailing dim back to 2D rather than trusting either
+        # behavior blindly.
+        if raw.shape[2] != 1:
+            raise ValueError(f"Expected a single-channel label mask at {path}, got shape {raw.shape}")
+        raw = raw[:, :, 0]
     lut = np.full(256, config.SEGFORMER_IGNORE_INDEX, dtype=np.uint8)
     for raw_id, train_id in config.CITYSCAPES_ID_TO_TRAINID.items():
         lut[raw_id] = train_id
