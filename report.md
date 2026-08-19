@@ -1,22 +1,24 @@
 # Evaluating Robustness of Classical and Deep-Learning Computer Vision Methods Under Image Degradation
 
 Digital Image Processing — Final Project Technical Report
-
-> **Scope note.** This report documents only what was actually implemented and executed in this repository. Every numeric result below is traced to a specific committed artifact (a CSV under `results/`, a notebook cell, or a PNG under `figures/`). Where something was planned in the project's design but not run, or is out of the locked project scope, this is stated explicitly rather than omitted or invented.
-
 ---
 
-## 1. Project Motivation and Objectives
+## 📌 1. Project Motivation and Objectives
 
-Computer vision pipelines trained and evaluated on clean, curated imagery routinely degrade when deployed against real-world sensor noise, motion, and compression artifacts — a gap that matters most for domains like autonomous driving, where the KITTI dataset originates. This project's goal (per the repository's `README.md` and locked project specification) is to:
+Computer vision pipelines trained and evaluated on clean, curated imagery routinely degrade when deployed against real-world sensor noise, motion, and compression artifacts.
+This project's goal is to:
 
-1. Quantify how three common, realistic image distortions — impulse (salt & pepper) noise, motion blur, and JPEG compression — degrade the performance of four representative computer-vision tasks spanning classical (non-learned) and deep-learning methods.
-2. Compare two independent recovery strategies for undoing that degradation: (a) classical, distortion-specific image restoration applied before inference, and (b) distortion-aware fine-tuning of the deep-learning models themselves.
-3. Determine which recovery strategy is more effective, and whether the answer depends on the task or the distortion.
+**1. Quantify Distortion Impact:** Measure how three common, realistic image distortions — impulse (salt & pepper) noise, motion blur, and JPEG compression — degrade the performance of four representative computer-vision tasks spanning classical (non-learned) and deep-learning methods.
+
+**2. Compare Recovery Strategies:** Evaluate two independent restoration workflows:
+    * *(a)* Classical, distortion-specific image restoration applied before inference.
+    * *(b)* Distortion-aware fine-tuning of the deep-learning models themselves.s.
+    
+**3. Identify Optimal Strategy:** Determine which recovery strategy is more effective, and whether the answer depends on the task or the distortion.
 
 The project intentionally mixes low-level, non-learned tasks (feature matching, optical flow) with high-level, deep-learning tasks (object detection, semantic segmentation), per the assignment's requirement to cover both levels.
 
-## 2. Problem Definition
+## 📐 2. Problem Definition
 
 The evaluation pipeline follows a fixed five-stage protocol, executed as five sequential notebooks:
 
@@ -28,11 +30,17 @@ The evaluation pipeline follows a fixed five-stage protocol, executed as five se
 | Recovery evaluation | `04_restoration.ipynb` | Apply each distortion's restoration counterpart; re-run all 4 tasks; measure recovery |
 | Model adaptation | `05_finetuning_distorted.ipynb` | Fine-tune the two DL models (YOLOv8, SegFormer) on a blended mix of all distortions/severities; compare against a same-budget clean-only control |
 
-Every stage compares against the same reference point: the clean baseline established in notebook 02. The full clean → distorted → restored → fine-tuned chain is only completed for the two deep-learning tasks (object detection, semantic segmentation); the two classical tasks (feature matching, optical flow) are non-learned and are evaluated only through clean → distorted → restored, per the project's locked scope (fine-tuning is not defined for a non-parametric ORB/Farneback pipeline).
+> ℹ️ Every stage compares against the clean baseline established in notebook 02. Deep learning models complete the full `Clean → Distorted → Restored → Fine-Tuned` pipeline, whereas classical tasks complete `Clean → Distorted → Restored`.
 
-Scope is locked to: dataset = KITTI; 4 tasks (ORB feature matching, Farneback optical flow, YOLOv8 detection, SegFormer segmentation); 3 distortions (salt & pepper, motion blur, JPEG compression) each paired with one course-grounded restoration method. This is documented in the repository's `CLAUDE.md` project specification and mirrored in `README.md`.
+**Dataset:** KITTI
 
-## 3. Dataset
+**Tasks:** 
+* ORB feature matching
+* Farneback optical flow
+* YOLOv8 detection
+* SegFormer segmentation
+
+## 🚗 3. Dataset
 
 **KITTI** was used because it provides *native* (not derived/proxy) ground truth for three of the four tasks (2D object detection, semantic segmentation, optical flow), and is the dataset named as an example in the course material.
 
@@ -71,7 +79,16 @@ Instance counts over the 350 training images (`01_dataset_visualization.ipynb`, 
 | Tram | 31 |
 | Person_sitting | 19 |
 
-Total: 1,824 labeled objects. **Car dominates at ~69%** of all instances, and `Person_sitting` is the rarest class with only 19 instances — this imbalance recurs throughout the results below (e.g. `Person_sitting` has no ground-truth instances at all in the clean-baseline evaluation split, per notebook 02 cell 13). Visualized in `figures/01_dataset_visualization/detection_gt_grid.png`, `segmentation_gt_grid.png`, `optical_flow_gt.png`.
+Total: 1,824 labeled objects. **Car dominates at ~69%** of all instances, and `Person_sitting` is the rarest class with only 19 instances — this imbalance recurs throughout the results below (e.g. `Person_sitting` has no ground-truth instances at all in the clean-baseline evaluation split, per notebook 02 cell 13).
+
+![KITTI object detection ground truth grid](figures/01_dataset_visualization/detection_gt_grid.png)
+*Sample KITTI images with ground-truth detection boxes (`01_dataset_visualization.ipynb`).*
+
+![KITTI semantic segmentation ground truth grid](figures/01_dataset_visualization/segmentation_gt_grid.png)
+*Sample KITTI Semantics images with ground-truth masks (`01_dataset_visualization.ipynb`).*
+
+![KITTI optical flow ground truth](figures/01_dataset_visualization/optical_flow_gt.png)
+*Sample KITTI Flow 2015 frame pair with ground-truth flow (`01_dataset_visualization.ipynb`).*
 
 ### 3.4 Class-mismatch handling (detection)
 
@@ -174,6 +191,9 @@ All five notebooks (`01`–`05`) show real, committed execution outputs — popu
 
 YOLOv8: `yolov8n.pt` → head fine-tuned on the 8 KITTI classes, clean train/val split, 50 epochs (`YOLO_FINE_TUNE_EPOCHS`). This is a one-time step; its output checkpoint is what every later notebook treats as "baseline."
 
+![YOLOv8 clean-baseline fine-tuning training curve](figures/02_clean_baseline/yolo_training_curve.png)
+*Train/val loss over 50 epochs, clean-adapted YOLOv8 head fine-tune (`02_clean_baseline.ipynb`).*
+
 ### 7.4 Fine-tuning configuration (notebook 05 — distortion-aware adaptation)
 
 Two independently fine-tuned variants per DL model, both continuing from the notebook-02 clean-adapted checkpoint, using the **same** `fine_tune()` function, hyperparameters (`config.YOLO_FINE_TUNE_EPOCHS` / `config.SEGFORMER_FINE_TUNE_EPOCHS=10` @ `lr=5e-5`), and train/val split — the only intentional difference is the training images:
@@ -192,7 +212,19 @@ Training curves (saved figures, `figures/05_finetuning_distorted/`):
 
 (Source: notebooks/05's own markdown analysis cells immediately following each training curve.)
 
-For reference, the original clean-baseline YOLOv8 head fine-tune (notebook 02) showed train/val loss dropping steeply from ~6.7 to ~3.7 within the first 10 epochs, no overfitting through 50 epochs, val loss plateauing ~3.1 after epoch 30 (`figures/02_clean_baseline/yolo_training_curve.png`).
+![YOLOv8 distortion-aware (blended) fine-tuning training curve](figures/05_finetuning_distorted/yolo_training_curve_blended.png)
+*YOLOv8, distortion-aware (blended) fine-tune — train vs. val loss (`05_finetuning_distorted.ipynb`).*
+
+![YOLOv8 clean-control fine-tuning training curve](figures/05_finetuning_distorted/yolo_training_curve_clean_control.png)
+*YOLOv8, clean-control fine-tune — train vs. val loss (`05_finetuning_distorted.ipynb`).*
+
+![SegFormer distortion-aware (blended) fine-tuning training curve](figures/05_finetuning_distorted/segformer_training_curve_blended.png)
+*SegFormer, distortion-aware (blended) fine-tune — train vs. val loss (`05_finetuning_distorted.ipynb`).*
+
+![SegFormer clean-control fine-tuning training curve](figures/05_finetuning_distorted/segformer_training_curve_clean_control.png)
+*SegFormer, clean-control fine-tune — train vs. val loss (`05_finetuning_distorted.ipynb`).*
+
+For reference, the original clean-baseline YOLOv8 head fine-tune (notebook 02, curve shown in §7.3 above) showed train/val loss dropping steeply from ~6.7 to ~3.7 within the first 10 epochs, no overfitting through 50 epochs, val loss plateauing ~3.1 after epoch 30.
 
 ## 8. Evaluation Methodology
 
@@ -237,8 +269,14 @@ Source: `results/02_clean_baseline/summary.csv`.
 Notes:
 - The ORB "match accuracy" clean-baseline value (1.000) is a **clean-vs-clean self-match** — a trivial ceiling case, not comparable to the clean-vs-distorted accuracies reported in §9.2 (this is stated explicitly in notebook 03's own markdown, cell 16).
 - The EPE baseline (28.648 px) is already large even on clean images — this is the classical Farneback method's inherent accuracy on KITTI Flow 2015, not a distortion artifact; it serves purely as the reference point for §9.2/9.3's comparisons.
-- Object detection per-class: highest AP for **Car (0.50)** and **Truck (0.49)**; **Person_sitting** has zero ground-truth instances in this evaluation split and is excluded from its per-class chart (`figures/02_clean_baseline/detection_map_per_class.png`).
-- Segmentation per-class: highest IoU for **Sky (0.90), Vegetation (0.87), Car (0.85), Building (0.81), Road (0.80)**; lowest for **Person (~0.01), Rider (0.10), Bus/Train/Motorcycle (0.0)** — attributed in the notebook's own analysis to class imbalance or total absence of some categories in this test slice (`figures/02_clean_baseline/segmentation_iou_per_class.png`).
+- Object detection per-class: highest AP for **Car (0.50)** and **Truck (0.49)**; **Person_sitting** has zero ground-truth instances in this evaluation split and is excluded from its per-class chart.
+- Segmentation per-class: highest IoU for **Sky (0.90), Vegetation (0.87), Car (0.85), Building (0.81), Road (0.80)**; lowest for **Person (~0.01), Rider (0.10), Bus/Train/Motorcycle (0.0)** — attributed in the notebook's own analysis to class imbalance or total absence of some categories in this test slice.
+
+![Clean-baseline detection mAP per class](figures/02_clean_baseline/detection_map_per_class.png)
+*Per-class detection AP on clean images (`02_clean_baseline.ipynb`).*
+
+![Clean-baseline segmentation IoU per class](figures/02_clean_baseline/segmentation_iou_per_class.png)
+*Per-class segmentation IoU on clean images (`02_clean_baseline.ipynb`).*
 
 **Provenance caveat**: notebook 05 loads its own "clean" reference from a separate, non-git-tracked copy of this table (`data/results/02_clean_baseline.csv`, evidently from a later, unsynced re-run of notebook 02 after a documented GPU fix, commit `3c97cea`). That copy's numbers are close but not byte-identical to the git-tracked ones above (e.g. clean mAP@0.5 reads as 0.419 in notebook 05's tables vs. 0.4171 here) — both are legitimate baseline evaluation runs on the same 500-image split, and the difference is well within normal eval-to-eval variance; §9.4 uses notebook 05's own internal reference for internal consistency with its own comparison table, and this discrepancy is noted rather than silently reconciled.
 
@@ -270,7 +308,69 @@ Source: `results/03_distortions/summary.csv` (15 rows: 3 distortions × 5 severi
 | 2 | 40 | 20.91 | 0.997 | 0.278 | 0.359 |
 | 4 | 10 | 18.72 | 0.989 | 0.165 | 0.236 |
 
-Full 15-row table with all metrics (EPE, Fl-error, mAP@0.5/0.75, mAR@100) is in the CSV; supporting figures: `figures/03_distortions/{before_after,all_distortions_all_levels_grid,performance_vs_snr_grid,performance_vs_mean_snr_grid,*_robustness_bars,detection_map_per_class_clean_vs_motion_blur_severe,segmentation_iou_per_class_clean_vs_motion_blur_severe}.png`.
+Full 15-row table with all metrics (EPE, Fl-error, mAP@0.5/0.75, mAR@100) is in the CSV (`results/03_distortions/summary.csv`). Supporting figures:
+
+**Before/after, strongest severity, and the full severity grid:**
+
+![Before/after: salt & pepper noise](figures/03_distortions/before_after_salt_pepper.png)
+*Sample image before/after salt & pepper noise at its strongest tested level.*
+
+![Before/after: motion blur](figures/03_distortions/before_after_motion_blur.png)
+*Sample image before/after motion blur at its strongest tested level.*
+
+![Before/after: JPEG compression](figures/03_distortions/before_after_jpeg_compression.png)
+*Sample image before/after JPEG compression at its strongest tested level.*
+
+![All distortions, all severity levels grid](figures/03_distortions/all_distortions_all_levels_grid.png)
+*Every distortion (row) at every configured severity level (column), same sample image.*
+
+**Performance vs. SNR — summary grids (all tasks, all distortions):**
+
+![Performance vs. SNR grid](figures/03_distortions/performance_vs_snr_grid.png)
+*Match accuracy, EPE/Fl-error, mAP, and mean IoU vs. SNR, one panel per task.*
+
+![Performance vs. mean SNR grid, with clean-baseline reference](figures/03_distortions/performance_vs_mean_snr_grid.png)
+*Same as above, with a horizontal clean-baseline reference line per task.*
+
+**Robustness bar charts (metric vs. distortion severity, clean-baseline reference line):**
+
+![Match accuracy robustness bars](figures/03_distortions/match_accuracy_robustness_bars.png)
+*ORB match accuracy across all distortion×severity conditions.*
+
+![EPE robustness bars](figures/03_distortions/epe_robustness_bars.png)
+*Optical flow EPE across all distortion×severity conditions (lower is better).*
+
+![mAP robustness bars](figures/03_distortions/map_robustness_bars.png)
+*Detection mAP across all distortion×severity conditions.*
+
+![Mean IoU robustness bars](figures/03_distortions/mean_iou_robustness_bars.png)
+*Segmentation mean IoU across all distortion×severity conditions.*
+
+**Per-task, per-distortion performance vs. SNR (individual curves underlying the summary grids above):**
+
+![Feature matching accuracy vs. SNR](figures/03_distortions/feature_matching_accuracy_vs_snr.png)
+*ORB match accuracy vs. SNR, one curve per distortion.*
+
+![Object detection mAP vs. SNR](figures/03_distortions/object_detection_map_vs_snr.png)
+*Detection mAP vs. SNR, one curve per distortion.*
+
+![Optical flow EPE vs. SNR](figures/03_distortions/optical_flow_epe_vs_snr.png)
+*Optical flow EPE vs. SNR, one curve per distortion.*
+
+![Optical flow Fl-error vs. SNR](figures/03_distortions/optical_flow_fl_error_vs_snr.png)
+*Optical flow Fl-error vs. SNR, one curve per distortion.*
+
+![Semantic segmentation IoU vs. SNR](figures/03_distortions/semantic_segmentation_iou_vs_snr.png)
+*Segmentation mean IoU vs. SNR, one curve per distortion.*
+
+![Performance vs. SNR — salt & pepper](figures/03_distortions/performance_vs_snr_salt_pepper.png)
+*All-task performance vs. SNR, salt & pepper noise only.*
+
+![Performance vs. SNR — motion blur](figures/03_distortions/performance_vs_snr_motion_blur.png)
+*All-task performance vs. SNR, motion blur only.*
+
+![Performance vs. SNR — JPEG compression](figures/03_distortions/performance_vs_snr_jpeg_compression.png)
+*All-task performance vs. SNR, JPEG compression only.*
 
 **Per-task vulnerability summary** (notebook 03's own analysis tables, cells 18 and 22):
 
@@ -283,7 +383,13 @@ Full 15-row table with all metrics (EPE, Fl-error, mAP@0.5/0.75, mAR@100) is in 
 
 A notable secondary finding (notebook 03, cell 18): at mild-to-moderate salt-and-pepper noise (18 dB–13 dB SNR), Farneback optical flow EPE/Fl-error were reported *lower* than the clean baseline before rising again at 5 dB — attributed to impulse noise producing identical, stationary 0/255 pixel spikes across consecutive frames, which the classical flow estimator can interpret as near-zero motion, artificially suppressing the error metric. This is flagged in the source notebook as a metric artifact, not a genuine robustness advantage.
 
-Under the most severe motion blur tested, 6 of 8 detection classes dropped to (near) 0.0 mAP, while segmentation retained substantially more of its performance at the same severity — attributed to YOLO's dependence on sharp local edge gradients for region proposals vs. SegFormer's transformer backbone leveraging global spatial context (`figures/03_distortions/detection_map_per_class_clean_vs_motion_blur_severe.png`, `segmentation_iou_per_class_clean_vs_motion_blur_severe.png`).
+Under the most severe motion blur tested, 6 of 8 detection classes dropped to (near) 0.0 mAP, while segmentation retained substantially more of its performance at the same severity — attributed to YOLO's dependence on sharp local edge gradients for region proposals vs. SegFormer's transformer backbone leveraging global spatial context.
+
+![Detection mAP per class: clean vs. severe motion blur](figures/03_distortions/detection_map_per_class_clean_vs_motion_blur_severe.png)
+*Per-class detection mAP, clean vs. motion blur at its most severe tested level.*
+
+![Segmentation IoU per class: clean vs. severe motion blur](figures/03_distortions/segmentation_iou_per_class_clean_vs_motion_blur_severe.png)
+*Per-class segmentation IoU, clean vs. motion blur at its most severe tested level.*
 
 ### 9.3 Restoration (notebook 04)
 
@@ -301,7 +407,79 @@ Source: `results/04_restoration/summary.csv` (15 rows, same distortion × level 
 | JPEG compression | Mean IoU | 0.236 | 0.2372 |
 | JPEG compression | Match accuracy | 0.989 | 0.989 |
 
-Full table in the CSV; supporting figures: `figures/04_restoration/{before_after_*, clean_distorted_restored_*, task_comparison_*, *_metrics_grid, *_detection_per_class_ap, *_segmentation_per_class_iou, summary_bars_grid}.png`.
+Full table in the CSV (`results/04_restoration/summary.csv`). Supporting figures:
+
+**Before/after restoration, strongest severity:**
+
+![Before/after restoration: salt & pepper](figures/04_restoration/before_after_salt_pepper.png)
+*Distorted vs. restored, salt & pepper noise, strongest tested level.*
+
+![Before/after restoration: motion blur](figures/04_restoration/before_after_motion_blur.png)
+*Distorted vs. restored, motion blur, strongest tested level.*
+
+![Before/after restoration: JPEG compression](figures/04_restoration/before_after_jpeg_compression.png)
+*Distorted vs. restored, JPEG compression, strongest tested level.*
+
+**Clean vs. distorted vs. restored, sample image:**
+
+![Clean/distorted/restored: salt & pepper](figures/04_restoration/clean_distorted_restored_salt_pepper.png)
+*Sample image across all three pipeline stages, salt & pepper noise.*
+
+![Clean/distorted/restored: motion blur](figures/04_restoration/clean_distorted_restored_motion_blur.png)
+*Sample image across all three pipeline stages, motion blur.*
+
+![Clean/distorted/restored: JPEG compression](figures/04_restoration/clean_distorted_restored_jpeg_compression.png)
+*Sample image across all three pipeline stages, JPEG compression.*
+
+**Per-task comparison across distortions (clean / distorted / restored, strongest severity):**
+
+![Task comparison: object detection](figures/04_restoration/task_comparison_object_detection.png)
+*Detection boxes across all 3 distortions × clean/distorted/restored.*
+
+![Task comparison: semantic segmentation](figures/04_restoration/task_comparison_semantic_segmentation.png)
+*Segmentation masks across all 3 distortions × clean/distorted/restored.*
+
+![Task comparison: feature matching](figures/04_restoration/task_comparison_feature_matching.png)
+*ORB keypoints across all 3 distortions × clean/distorted/restored.*
+
+![Task comparison: optical flow](figures/04_restoration/task_comparison_optical_flow.png)
+*Flow fields across all 3 distortions × clean/distorted/restored.*
+
+**Per-distortion metrics grids (all tasks, distorted vs. restored):**
+
+![Salt & pepper metrics grid](figures/04_restoration/salt_pepper_metrics_grid.png)
+*All-task metrics, distorted vs. restored, salt & pepper noise.*
+
+![Motion blur metrics grid](figures/04_restoration/motion_blur_metrics_grid.png)
+*All-task metrics, distorted vs. restored, motion blur.*
+
+![JPEG compression metrics grid](figures/04_restoration/jpeg_compression_metrics_grid.png)
+*All-task metrics, distorted vs. restored, JPEG compression.*
+
+**Per-class AP/IoU, distorted vs. restored, strongest severity:**
+
+![Salt & pepper detection per-class AP](figures/04_restoration/salt_pepper_detection_per_class_ap.png)
+*Per-class detection AP, distorted vs. restored, salt & pepper noise.*
+
+![Motion blur detection per-class AP](figures/04_restoration/motion_blur_detection_per_class_ap.png)
+*Per-class detection AP, distorted vs. restored, motion blur.*
+
+![JPEG compression detection per-class AP](figures/04_restoration/jpeg_compression_detection_per_class_ap.png)
+*Per-class detection AP, distorted vs. restored, JPEG compression.*
+
+![Salt & pepper segmentation per-class IoU](figures/04_restoration/salt_pepper_segmentation_per_class_iou.png)
+*Per-class segmentation IoU, distorted vs. restored, salt & pepper noise.*
+
+![Motion blur segmentation per-class IoU](figures/04_restoration/motion_blur_segmentation_per_class_iou.png)
+*Per-class segmentation IoU, distorted vs. restored, motion blur.*
+
+![JPEG compression segmentation per-class IoU](figures/04_restoration/jpeg_compression_segmentation_per_class_iou.png)
+*Per-class segmentation IoU, distorted vs. restored, JPEG compression.*
+
+**Summary — clean vs. distorted vs. restored, per task, strongest severity:**
+
+![Summary bars grid: clean vs. distorted vs. restored](figures/04_restoration/summary_bars_grid.png)
+*One grouped bar chart per task: clean / distorted / restored, grouped by distortion type, at each distortion's strongest tested level.*
 
 **Notebook 04's own detailed impact table** (cell 23, reproduced with its stated "level 0 → 4" ranges):
 
@@ -338,6 +516,15 @@ Setup detailed in §7.4. Full sweep source: `results/05_finetuning_distorted/sum
 
 (On the "clean" column's slightly different mAP@0.5 value here vs. §9.1's 0.4171, see the provenance caveat in §9.1.)
 
+![Final comparison: salt & pepper](figures/05_finetuning_distorted/final_comparison_salt_pepper.png)
+*Clean → distorted → restored → fine-tuned, salt & pepper noise, mAP / mAP@0.5 / mean IoU.*
+
+![Final comparison: motion blur](figures/05_finetuning_distorted/final_comparison_motion_blur.png)
+*Clean → distorted → restored → fine-tuned, motion blur, mAP / mAP@0.5 / mean IoU.*
+
+![Final comparison: JPEG compression](figures/05_finetuning_distorted/final_comparison_jpeg_compression.png)
+*Clean → distorted → restored → fine-tuned, JPEG compression, mAP / mAP@0.5 / mean IoU.*
+
 **The notebook's own per-distortion takeaways** (its Conclusion cell, quoted/paraphrased):
 
 - **Salt & Pepper**: restoration alone recovers most of the loss (mAP 0.006 → 0.240); fine-tuning adds a further +0.045 mAP on top.
@@ -346,9 +533,18 @@ Setup detailed in §7.4. Full sweep source: `results/05_finetuning_distorted/sum
 
 **Clean-control ablation**: the notebook states that distortion-aware fine-tuning "clears clean-control by a wide margin in every condition, confirming the improvement... is attributable to the distorted training data itself, not just additional training time." The clean-control numbers in the table above make the point directly — e.g. for motion blur, the clean-control fine-tune (mAP 0.023) does not even outperform doing nothing at all (0.025, distorted with no fine-tuning), i.e. extra training on clean-only data bought nothing against a distortion the model never saw.
 
-**Severity trend**: the notebook states the gap between the two fine-tuned variants **widens** as distortion severity increases (visualized in `figures/05_finetuning_distorted/finetuning_vs_snr.png`); the underlying per-level numbers are in `results/05_finetuning_distorted/summary.csv` rather than spelled out in the notebook's own prose (that sentence is truncated in the source cell). Reading the CSV directly: for salt & pepper, distortion-aware mAP declines only mildly from level 0 to level 4 (0.391 → 0.285), while clean-control collapses toward zero over the same range (0.284 → 0.008).
+**Severity trend**: the notebook states the gap between the two fine-tuned variants **widens** as distortion severity increases; the underlying per-level numbers are in `results/05_finetuning_distorted/summary.csv` rather than spelled out in the notebook's own prose (that sentence is truncated in the source cell). Reading the CSV directly: for salt & pepper, distortion-aware mAP declines only mildly from level 0 to level 4 (0.391 → 0.285), while clean-control collapses toward zero over the same range (0.284 → 0.008).
 
-**Qualitative results**: `figures/05_finetuning_distorted/qualitative_detection.png` and `qualitative_segmentation.png` show baseline vs. distortion-aware vs. clean-control predictions on the same sample image at each distortion's maximum severity. The notebook's own qualitative observation (cell 33): YOLOv8's bounding-box regression is "far more fragile under noise than SegFormer's spatial self-attention" — YOLO collapses to zero detections under severe salt & pepper noise while SegFormer retains rough global layout even before fine-tuning; the distortion-aware model "consistently eliminates visual hallucination, corrects class confusion, and restores high-confidence detections across every distortion type at maximum severity."
+![Fine-tuning benefit vs. distortion severity (mean SNR)](figures/05_finetuning_distorted/finetuning_vs_snr.png)
+*mAP / mAP@0.5 / mean IoU vs. mean SNR, distortion-aware vs. clean-control, one panel per distortion, with clean-baseline reference.*
+
+**Qualitative results**: baseline vs. distortion-aware vs. clean-control predictions on the same sample image at each distortion's maximum severity. The notebook's own qualitative observation (cell 33): YOLOv8's bounding-box regression is "far more fragile under noise than SegFormer's spatial self-attention" — YOLO collapses to zero detections under severe salt & pepper noise while SegFormer retains rough global layout even before fine-tuning; the distortion-aware model "consistently eliminates visual hallucination, corrects class confusion, and restores high-confidence detections across every distortion type at maximum severity."
+
+![Qualitative comparison: object detection](figures/05_finetuning_distorted/qualitative_detection.png)
+*Baseline vs. distortion-aware vs. clean-control detection, each distortion at its maximum severity.*
+
+![Qualitative comparison: semantic segmentation](figures/05_finetuning_distorted/qualitative_segmentation.png)
+*Baseline vs. distortion-aware vs. clean-control segmentation, each distortion at its maximum severity.*
 
 **Stated limitation** (verbatim from the notebook's own Conclusion cell): *"This notebook evaluates the fine-tuned checkpoints only against distorted test sets, never against the clean test set — so... there's no measured evidence here either way on whether distortion-aware fine-tuning preserved clean-image performance. That would need an additional clean-image eval pass, not yet run."*
 
@@ -363,6 +559,15 @@ Pulling the four-stage comparison together, per distortion (object detection mAP
 | Salt & pepper | 0.260 | 0.006 | 0.240 | 0.285 | Restoration alone nearly closes the gap; fine-tuning closes it fully and slightly exceeds clean |
 | Motion blur | 0.260 | 0.025 | 0.109 | 0.332 | Restoration only partially recovers; fine-tuning is decisively the stronger intervention |
 | JPEG compression | 0.260 | 0.165 | 0.167 | 0.372 | Restoration is essentially ineffective; fine-tuning is the only intervention that meaningfully helps |
+
+![All distortions: mAP](figures/05_finetuning_distorted/all_distortions_map.png)
+*Detection mAP, all 3 distortions, clean-control vs. distortion-aware fine-tuned.*
+
+![All distortions: mAP@0.5](figures/05_finetuning_distorted/all_distortions_map_50.png)
+*Detection mAP@0.5, all 3 distortions, clean-control vs. distortion-aware fine-tuned.*
+
+![All distortions: mean IoU](figures/05_finetuning_distorted/all_distortions_mean_iou.png)
+*Segmentation mean IoU, all 3 distortions, clean-control vs. distortion-aware fine-tuned.*
 
 The two recovery strategies are **not interchangeable across distortions**: classical restoration's effectiveness tracks how well-matched its assumption is to the distortion (median filtering is close to ideal for i.i.d. impulse noise; frequency-domain deconvolution needs the exact known blur kernel and is only partially effective; bilateral filtering + interpolation for JPEG artifacts was flagged from the start, per §6, as the weakest-grounded pairing in the project, and its near-zero measured effect is consistent with that). Distortion-aware fine-tuning, in contrast, is effective across all three distortions and is the only approach that both restores *and*, in this measurement, exceeds clean-baseline performance at maximum severity for two of the three distortions (salt & pepper, motion blur, JPEG — see §9.4's table) — though see §15 for why this specific "exceeds clean" framing should be read cautiously.
 
